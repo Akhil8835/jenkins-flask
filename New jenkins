@@ -1,16 +1,48 @@
 pipeline {
-    agent any // Specifies that the pipeline can run on any available agent
+    agent any
+
+    environment {
+        DOCKER_IMAGE = 'your-dockerhub-username/your-image-name'
+        DOCKER_TAG = 'latest'
+    }
 
     stages {
-        stage('Build') { // Defines a stage named 'Build'
+        stage('Checkout') {
             steps {
-                echo 'Building the application...' // Executes a step to print a message
+                checkout scm
             }
         }
-        stage('Test') { // Defines a stage named 'Test'
+
+        stage('Build Docker Image') {
             steps {
-                echo 'Running tests...' // Executes a step to print a message
+                script {
+                    sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
+                }
+            }
+        }
+
+        stage('Login to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    sh "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                }
             }
         }
     }
+
+    post {
+        always {
+            // Clean up Docker images
+            sh "docker rmi ${DOCKER_IMAGE}:${DOCKER_TAG} || true"
+        }
+    }
 }
+
